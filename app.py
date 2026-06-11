@@ -287,7 +287,7 @@ def api_model_predict():
 
 @app.route('/export')
 def export_high_risk():
-    """Downloads high risk customers list (probability >= 0.5) as an styled Excel spreadsheet."""
+    """Downloads high risk customers list (probability >= 0.5) as a styled Excel spreadsheet."""
     db_exists = os.path.exists(db_manager.DB_FILE)
     if not db_exists:
         return "Database not initialized. Run ETL first.", 400
@@ -316,7 +316,7 @@ def export_high_risk():
         # Add headers
         headers = [
             "Customer ID", "Tenure (Months)", "Billing Type", 
-            "Monthly Usage (GB)", "Monthly Charges ($)", "Total Charges ($)", 
+            "Monthly Usage (GB)", "Monthly Charges", "Total Charges", 
             "Complaints Count", "Actual Churn Status", "Churn Risk Probability"
         ]
         ws.append(headers)
@@ -332,73 +332,34 @@ def export_high_risk():
             cell.fill = header_fill
             cell.alignment = header_alignment
             
-        # Row Border & Alternating Colors styling
-        thin_border = Border(
-            left=Side(style='thin', color='E0E0E0'),
-            right=Side(style='thin', color='E0E0E0'),
-            top=Side(style='thin', color='E0E0E0'),
-            bottom=Side(style='thin', color='E0E0E0')
-        )
-        from openpyxl.utils import get_column_letter
-        
-        # Track column widths on the fly
-        col_widths = [len(h) for h in headers]
-        
-        # Row Border & Alternating Colors styling
-        thin_border = Border(
-            left=Side(style='thin', color='E0E0E0'),
-            right=Side(style='thin', color='E0E0E0'),
-            top=Side(style='thin', color='E0E0E0'),
-            bottom=Side(style='thin', color='E0E0E0')
-        )
-        fill_even = PatternFill(start_color="F5F8FA", end_color="F5F8FA", fill_type="solid")
-        
-        # Populate, style, format and width-track in a single pass
+        # Set professional column widths (fixed)
+        col_widths = {
+            'A': 15,  # Customer ID
+            'B': 16,  # Tenure
+            'C': 18,  # Billing Type
+            'D': 20,  # Monthly Usage
+            'E': 18,  # Monthly Charges
+            'F': 18,  # Total Charges
+            'G': 18,  # Complaints Count
+            'H': 20,  # Actual Churn Status
+            'I': 22   # Churn Risk Probability
+        }
+        for col_letter, width in col_widths.items():
+            ws.column_dimensions[col_letter].width = width
+            
+        # Populate sheet with pre-formatted strings for speed
         for index, row in df.iterrows():
-            row_values = [
+            ws.append([
                 row['customer_id'],
                 int(row['tenure_months']),
                 row['billing_type'],
-                float(row['usage_gb']),
-                float(row['monthly_charges']),
-                float(row['total_charges']),
+                f"{row['usage_gb']:.1f} GB",
+                f"${row['monthly_charges']:.2f}",
+                f"${row['total_charges']:.2f}",
                 int(row['num_complaints']),
                 "Churned" if int(row['churn_label']) == 1 else "Active",
-                round(float(row['churn_prob']), 4)
-            ]
-            ws.append(row_values)
-            
-            row_num = ws.max_row
-            is_even = row_num % 2 == 0
-            row_cells = ws[row_num]
-            
-            for col_num, cell in enumerate(row_cells, 1):
-                cell.border = thin_border
-                if is_even:
-                    cell.fill = fill_even
-                    
-                # Format alignments
-                if col_num in [2, 4, 5, 6, 7, 9]: # Numeric fields
-                    cell.alignment = Alignment(horizontal="right")
-                elif col_num in [1, 3, 8]: # Identifiers and category
-                    cell.alignment = Alignment(horizontal="center")
-                    
-                # Format specific values
-                if col_num in [5, 6]:
-                    cell.number_format = "$#,#0.00"
-                elif col_num == 9:
-                    cell.number_format = "0.00%"
-                    
-                # Track max length
-                val_str = str(cell.value)
-                if col_num == 9 and cell.value is not None:
-                    val_str = f"{cell.value * 100:.2f}%"
-                col_widths[col_num - 1] = max(col_widths[col_num - 1], len(val_str))
-                
-        # Set column widths using tracked values
-        for col_num, width in enumerate(col_widths, 1):
-            col_letter = get_column_letter(col_num)
-            ws.column_dimensions[col_letter].width = max(width + 4, 12)
+                f"{row['churn_prob']*100:.2f}%"
+            ])
             
         output = BytesIO()
         wb.save(output)
