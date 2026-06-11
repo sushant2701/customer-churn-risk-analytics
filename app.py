@@ -355,9 +355,6 @@ def export_high_risk():
         
         # Populate, style, format and width-track in a single pass
         for index, row in df.iterrows():
-            row_num = index + 2
-            is_even = row_num % 2 == 0
-            
             row_values = [
                 row['customer_id'],
                 int(row['tenure_months']),
@@ -369,9 +366,13 @@ def export_high_risk():
                 "Churned" if int(row['churn_label']) == 1 else "Active",
                 round(float(row['churn_prob']), 4)
             ]
+            ws.append(row_values)
             
-            for col_num, val in enumerate(row_values, 1):
-                cell = ws.cell(row=row_num, column=col_num, value=val)
+            row_num = ws.max_row
+            is_even = row_num % 2 == 0
+            row_cells = ws[row_num]
+            
+            for col_num, cell in enumerate(row_cells, 1):
                 cell.border = thin_border
                 if is_even:
                     cell.fill = fill_even
@@ -389,9 +390,9 @@ def export_high_risk():
                     cell.number_format = "0.00%"
                     
                 # Track max length
-                val_str = str(val)
-                if col_num == 9:
-                    val_str = f"{val * 100:.2f}%"
+                val_str = str(cell.value)
+                if col_num == 9 and cell.value is not None:
+                    val_str = f"{cell.value * 100:.2f}%"
                 col_widths[col_num - 1] = max(col_widths[col_num - 1], len(val_str))
                 
         # Set column widths using tracked values
