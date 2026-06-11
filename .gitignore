@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases & Models (Local instances)
+instance/
+data/raw_customers.csv
+data/cleaned_customers.csv
+data/etl.log
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env

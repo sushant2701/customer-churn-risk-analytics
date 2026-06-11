@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Customer Churn Risk Analytics{% endblock %}
+{% block page_header %}Executive Churn Risk Dashboard{% endblock %}
+
+{% block content %}
+
+{% if not db_exists %}
+<div class="alert alert-warning border-warning shadow-sm mb-4">
+    <h5 class="alert-heading"><i class="fa-solid fa-triangle-exclamation me-2"></i>Database Not Initialized</h5>
+    <p class="mb-0">The SQLite database does not exist yet. Please go to the <strong><a href="{{ url_for('etl_page') }}">ETL Pipeline</a></strong> page to generate synthetic telecom data, clean it, and load it into the database.</p>
+</div>
+{% elif not model_trained %}
+<div class="alert alert-info border-info shadow-sm mb-4">
+    <h5 class="alert-heading"><i class="fa-solid fa-circle-info me-2"></i>Model Not Trained</h5>
+    <p class="mb-0">The Random Forest machine learning model has not been trained yet. Churn risk probability scores and the "High-Risk Customer Count" KPI card are disabled. Go to the <strong><a href="{{ url_for('model_page') }}">Churn Model</a></strong> page to train the model.</p>
+</div>
+{% endif %}
+
+<!-- KPI Cards Grid -->
+<div class="row g-4 mb-4">
+    <!-- Total Customers -->
+    <div class="col-12 col-md-6 col-lg-3">
+        <div class="metric-card">
+            <div class="icon-box icon-blue">
+                <i class="fa-solid fa-users"></i>
+            </div>
+            <div class="metric-label">Total Customers</div>
+            <div class="metric-value">{{ metrics.total_customers }}</div>
+        </div>
+    </div>
+    
+    <!-- Churn Rate -->
+    <div class="col-12 col-md-6 col-lg-3">
+        <div class="metric-card">
+            <div class="icon-box icon-red">
+                <i class="fa-solid fa-user-minus"></i>
+            </div>
+            <div class="metric-label">Churn Rate (Actual)</div>
+            <div class="metric-value">{{ metrics.churn_rate }}</div>
+        </div>
+    </div>
+    
+    <!-- High-Risk Count -->
+    <div class="col-12 col-md-6 col-lg-3">
+        <div class="metric-card">
+            <div class="icon-box icon-orange">
+                <i class="fa-solid fa-user-shield"></i>
+            </div>
+            <div class="metric-label">High-Risk Customers</div>
+            <div class="metric-value">
+                {% if model_trained %}
+                    {{ metrics.high_risk_count }}
+                {% else %}
+                    <span class="fs-6 text-muted">Train Model First</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Avg Tenure -->
+    <div class="col-12 col-md-6 col-lg-3">
+        <div class="metric-card">
+            <div class="icon-box icon-teal">
+                <i class="fa-solid fa-hourglass-half"></i>
+            </div>
+            <div class="metric-label">Avg Tenure</div>
+            <div class="metric-value">{{ metrics.avg_tenure }}</div>
+        </div>
+    </div>
+</div>
+
+{% if db_exists %}
+<!-- Charts Grid -->
+<div class="row g-4 mb-4">
+    <!-- Usage Tier Churn Rate -->
+    <div class="col-12 col-lg-7">
+        <div class="panel-card h-100">
+            <div class="panel-card-header">
+                <h5><i class="fa-solid fa-chart-bar me-2 text-teal"></i>Churn Rate by Usage Tier</h5>
+                <span class="badge bg-light text-muted">Historical Analytics</span>
+            </div>
+            <div class="panel-card-body" style="height: 300px; position: relative;">
+                <canvas id="churnTierChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Billing Distribution -->
+    <div class="col-12 col-lg-5">
+        <div class="panel-card h-100">
+            <div class="panel-card-header">
+                <h5><i class="fa-solid fa-chart-pie me-2 text-primary"></i>Billing Tier Distribution</h5>
+                <span class="badge bg-light text-muted">Subscriber Mix</span>
+            </div>
+            <div class="panel-card-body" style="height: 300px; position: relative;">
+                <canvas id="billingDistChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- High Risk Table Panel -->
+<div class="panel-card">
+    <div class="panel-card-header">
+        <h5><i class="fa-solid fa-circle-exclamation me-2 text-danger"></i>Top 20 Flagged High-Risk Customers</h5>
+        {% if model_trained %}
+        <a href="{{ url_for('export_high_risk') }}" class="btn btn-sm btn-primary-custom">
+            <i class="fa-solid fa-file-excel me-1"></i>Export High-Risk to Excel
+        </a>
+        {% endif %}
+    </div>
+    <div class="panel-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="text-center">Customer ID</th>
+                        <th class="text-center">Tenure (m)</th>
+                        <th class="text-center">Billing Type</th>
+                        <th class="text-end">Usage (GB)</th>
+                        <th class="text-end">Monthly Charges</th>
+                        <th class="text-end">Total Charges</th>
+                        <th class="text-center">Complaints</th>
+                        <th class="text-center">Actual Status</th>
+                        <th class="text-end">Model Risk Prob</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if not model_trained %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            <i class="fa-solid fa-robot d-block fs-3 mb-2"></i>
+                            Please train the Machine Learning model on the <strong><a href="{{ url_for('model_page') }}">Churn Model</a></strong> page to calculate individual customer churn risks.
+                        </td>
+                    </tr>
+                    {% elif top_customers|length == 0 %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            No high-risk customer data matches predictions or records.
+                        </td>
+                    </tr>
+                    {% else %}
+                        {% for row in top_customers %}
+                        <tr>
+                            <td class="text-center fw-semibold">{{ row.customer_id }}</td>
+                            <td class="text-center">{{ row.tenure_months }}</td>
+                            <td class="text-center">{{ row.billing_type }}</td>
+                            <td class="text-end">{{ row.usage_gb }} GB</td>
+                            <td class="text-end">${{ "%.2f"|format(row.monthly_charges) }}</td>
+                            <td class="text-end">${{ "%.2f"|format(row.total_charges) }}</td>
+                            <td class="text-center">
+                                <span class="badge {% if row.num_complaints >= 4 %}bg-danger{% elif row.num_complaints >= 2 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                    {{ row.num_complaints }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                {% if row.churn_label == 1 %}
+                                <span class="badge bg-danger">Churned</span>
+                                {% else %}
+                                <span class="badge bg-success">Active</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-bold text-danger">
+                                {{ "%.1f"|format(row.churn_prob * 100) }}%
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

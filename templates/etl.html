@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}ETL Pipeline - Customer Churn Risk Analytics{% endblock %}
+{% block page_header %}ETL Data Pipeline & Ingestion{% endblock %}
+
+{% block content %}
+
+<!-- Status Overview Cards -->
+<div class="row g-4 mb-4">
+    <!-- Raw Data Status -->
+    <div class="col-12 col-md-4">
+        <div class="metric-card">
+            <div class="icon-box {% if stats.raw_exists %}icon-teal{% else %}icon-orange{% endif %}">
+                <i class="fa-solid fa-file-csv"></i>
+            </div>
+            <div class="metric-label">Raw Dataset Status</div>
+            <div class="metric-value fs-5">
+                {% if stats.raw_exists %}
+                    <span class="text-success fw-bold"><i class="fa-solid fa-check me-1"></i>Found (raw_customers.csv)</span>
+                {% else %}
+                    <span class="text-warning fw-bold"><i class="fa-solid fa-xmark me-1"></i>Missing</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cleaned Data Status -->
+    <div class="col-12 col-md-4">
+        <div class="metric-card">
+            <div class="icon-box {% if stats.cleaned_exists %}icon-blue{% else %}icon-orange{% endif %}">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </div>
+            <div class="metric-label">Cleaned Dataset Status</div>
+            <div class="metric-value fs-5">
+                {% if stats.cleaned_exists %}
+                    <span class="text-success fw-bold"><i class="fa-solid fa-check me-1"></i>Generated (cleaned_customers.csv)</span>
+                {% else %}
+                    <span class="text-warning fw-bold"><i class="fa-solid fa-xmark me-1"></i>Missing</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Database Record Count -->
+    <div class="col-12 col-md-4">
+        <div class="metric-card">
+            <div class="icon-box {% if stats.db_records > 0 %}icon-blue{% else %}icon-orange{% endif %}">
+                <i class="fa-solid fa-database"></i>
+            </div>
+            <div class="metric-label">Database Loaded Records</div>
+            <div class="metric-value">
+                {% if stats.db_records > 0 %}
+                    {{ stats.db_records|string }} rows
+                {% else %}
+                    0 rows
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Controller & Logs -->
+<div class="row g-4">
+    <!-- Controller Actions -->
+    <div class="col-12 col-lg-4">
+        <div class="panel-card">
+            <div class="panel-card-header">
+                <h5><i class="fa-solid fa-gears me-2 text-primary"></i>Pipeline Operations</h5>
+            </div>
+            <div class="panel-card-body">
+                <p class="text-muted">Generate a new set of 50,000+ synthetic subscriber records with anomalies (null values, duplicates, parsing issues), run the transformation cleaning script, and reload database tables.</p>
+                <div class="d-grid mb-3">
+                    <button id="runEtlBtn" class="btn btn-primary-custom py-2">
+                        <i class="fa-solid fa-play me-2"></i>Run ETL Pipeline
+                    </button>
+                </div>
+                
+                <hr>
+                
+                <h6 class="fw-bold text-dark mt-3"><i class="fa-solid fa-info-circle me-1 text-teal"></i>ETL Specifications:</h6>
+                <ul class="text-muted ps-3 mb-0" style="font-size: 0.85rem;">
+                    <li class="mb-2"><strong>Extract:</strong> Create 50,000+ raw records representing usage billing metrics.</li>
+                    <li class="mb-2"><strong>Clean:</strong> Resolve null values in numeric variables using median values, remove duplicates based on customer_id, strip text spaces.</li>
+                    <li class="mb-2"><strong>Normalize:</strong> Scale numerical features to a standard [0.0 - 1.0] range to optimize classification.</li>
+                    <li><strong>Load:</strong> Write records into relational SQLite database, creating search optimized index structures.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Console Logging Console -->
+    <div class="col-12 col-lg-8">
+        <div class="panel-card">
+            <div class="panel-card-header">
+                <h5><i class="fa-solid fa-terminal me-2 text-success"></i>ETL Execution Logs</h5>
+                <span class="badge bg-dark">Live Output</span>
+            </div>
+            <div class="panel-card-body">
+                <div class="console-box" id="consoleBox">
+                    <pre id="logOutput">Initializing terminal logs console...</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

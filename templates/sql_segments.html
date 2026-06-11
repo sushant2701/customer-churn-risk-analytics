@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+
+{% block title %}SQL Segments - Customer Churn Risk Analytics{% endblock %}
+{% block page_header %}Database Customer Segmentation{% endblock %}
+
+{% block content %}
+
+{% if not db_exists %}
+<div class="alert alert-warning border-warning shadow-sm mb-4">
+    <h5 class="alert-heading"><i class="fa-solid fa-triangle-exclamation me-2"></i>Database Not Loaded</h5>
+    <p class="mb-0">Please initialize the database first on the <a href="{{ url_for('etl_page') }}">ETL Pipeline</a> page before executing database queries.</p>
+</div>
+{% else %}
+
+<!-- Query Filters panel -->
+<div class="panel-card">
+    <div class="panel-card-header">
+        <h5><i class="fa-solid fa-filter me-2 text-teal"></i>Filter Subscribers</h5>
+        <span class="badge bg-primary">Indexed Joins</span>
+    </div>
+    <div class="panel-card-body">
+        <form method="GET" action="{{ url_for('sql_page') }}" class="row g-3 align-items-end">
+            <!-- Billing Type -->
+            <div class="col-12 col-md-5">
+                <label for="billing_type" class="form-label fw-semibold">Billing Type Tier</label>
+                <select name="billing_type" id="billing_type" class="form-select">
+                    <option value="All" {% if billing_type == 'All' %}selected{% endif %}>All Billing Types</option>
+                    <option value="Month-to-month" {% if billing_type == 'Month-to-month' %}selected{% endif %}>Month-to-month</option>
+                    <option value="One year" {% if billing_type == 'One year' %}selected{% endif %}>One year</option>
+                    <option value="Two year" {% if billing_type == 'Two year' %}selected{% endif %}>Two year</option>
+                </select>
+            </div>
+            
+            <!-- Usage Tier -->
+            <div class="col-12 col-md-5">
+                <label for="usage_tier" class="form-label fw-semibold">Monthly Usage Tier</label>
+                <select name="usage_tier" id="usage_tier" class="form-select">
+                    <option value="All" {% if usage_tier == 'All' %}selected{% endif %}>All Usage Levels</option>
+                    <option value="Low" {% if usage_tier == 'Low' %}selected{% endif %}>Low (&lt; 150 GB)</option>
+                    <option value="Medium" {% if usage_tier == 'Medium' %}selected{% endif %}>Medium (150 - 350 GB)</option>
+                    <option value="High" {% if usage_tier == 'High' %}selected{% endif %}>High (&gt; 350 GB)</option>
+                </select>
+            </div>
+            
+            <!-- Submit -->
+            <div class="col-12 col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary-custom py-2">
+                    <i class="fa-solid fa-magnifying-glass me-1"></i>Search SQL
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- SQL Details (Query + Explain Plan) -->
+{% if sql_query %}
+<div class="panel-card">
+    <div class="panel-card-header">
+        <h5><i class="fa-solid fa-code me-2 text-primary"></i>SQL Statement & Optimization Analysis</h5>
+        <span class="text-muted" style="font-size: 0.8rem;">Query Execution Analysis</span>
+    </div>
+    <div class="panel-card-body">
+        <!-- Exact SQL -->
+        <h6 class="fw-bold text-dark"><i class="fa-solid fa-terminal me-1 text-teal"></i>Executed Query:</h6>
+        <div class="sql-box mb-3">
+            <pre class="sql-query-text">{{ sql_query }}</pre>
+        </div>
+        
+        <!-- SQLite EXPLAIN QUERY PLAN -->
+        <h6 class="fw-bold text-dark"><i class="fa-solid fa-microchip me-1 text-teal"></i>SQLite Query Execution Plan (EXPLAIN QUERY PLAN):</h6>
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm table-custom bg-white">
+                <thead>
+                    <tr class="table-light">
+                        <th class="text-center" style="width: 80px;">Select ID</th>
+                        <th class="text-center" style="width: 80px;">Order</th>
+                        <th class="text-center" style="width: 80px;">From</th>
+                        <th>Execution Step Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for step in explain_plan %}
+                    <tr>
+                        <!-- Handle different SQLite versions output keys -->
+                        <td class="text-center">{{ step.selectid or step.id or 0 }}</td>
+                        <td class="text-center">{{ step.order or step.parent or 0 }}</td>
+                        <td class="text-center">{{ step.from or step.notused or 0 }}</td>
+                        <td class="font-monospace text-success">{{ step.detail }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <small class="text-muted"><i class="fa-solid fa-lightbulb text-warning me-1"></i>Note: An optimal query plan will show index lookups (e.g. <code>USING INDEX idx_customers_billing</code> or <code>USING PRIMARY KEY</code>) indicating SQLite avoids full-table scans when executing the join operations.</small>
+    </div>
+</div>
+{% endif %}
+
+<!-- Results Table -->
+<div class="panel-card">
+    <div class="panel-card-header">
+        <h5><i class="fa-solid fa-list-check me-2 text-teal"></i>Subscriber Results ({{ "{:,}".format(total_records) }} matches)</h5>
+    </div>
+    <div class="panel-card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-custom table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="text-center">Customer ID</th>
+                        <th class="text-center">Tenure (m)</th>
+                        <th class="text-center">Billing Type</th>
+                        <th class="text-end">Usage (GB)</th>
+                        <th class="text-center">Usage Tier</th>
+                        <th class="text-end">Monthly Charges</th>
+                        <th class="text-end">Total Charges</th>
+                        <th class="text-center">Complaints</th>
+                        <th class="text-center">Risk Prob</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if rows|length == 0 %}
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-5">
+                            No matching customers found for the selected criteria.
+                        </td>
+                    </tr>
+                    {% else %}
+                        {% for row in rows %}
+                        <tr>
+                            <td class="text-center fw-semibold">{{ row.customer_id }}</td>
+                            <td class="text-center">{{ row.tenure_months }}</td>
+                            <td class="text-center">{{ row.billing_type }}</td>
+                            <td class="text-end">{{ row.usage_gb }} GB</td>
+                            <td class="text-center">
+                                <span class="badge {% if row.calculated_usage_tier == 'High' %}bg-danger{% elif row.calculated_usage_tier == 'Medium' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                                    {{ row.calculated_usage_tier }}
+                                </span>
+                            </td>
+                            <td class="text-end">${{ "%.2f"|format(row.monthly_charges) }}</td>
+                            <td class="text-end">${{ "%.2f"|format(row.total_charges) }}</td>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ row.num_complaints }}</span>
+                            </td>
+                            <td class="text-center">
+                                {% if row.churn_prob is not none %}
+                                    <span class="fw-bold {% if row.churn_prob >= 0.5 %}text-danger{% else %}text-success{% endif %}">
+                                        {{ "%.1f"|format(row.churn_prob * 100) }}%
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted italic" style="font-size: 0.8rem;">Untrained</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Pagination Footer -->
+    {% if total_pages > 1 %}
+    <div class="panel-card-body border-top d-flex justify-content-between align-items-center py-3">
+        <div class="text-muted" style="font-size: 0.85rem;">
+            Showing Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong>
+        </div>
+        
+        <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+                <!-- Previous Page -->
+                <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('sql_page', billing_type=billing_type, usage_tier=usage_tier, page=page-1) }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo; Prev</span>
+                    </a>
+                </li>
+                
+                <!-- Page Range (show current and neighboring pages) -->
+                {% set start_page = [1, page - 2]|max %}
+                {% set end_page = [total_pages, page + 2]|min %}
+                
+                {% if start_page > 1 %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('sql_page', billing_type=billing_type, usage_tier=usage_tier, page=1) }}">1</a></li>
+                    {% if start_page > 2 %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endif %}
+                
+                {% for p in range(start_page, end_page + 1) %}
+                    <li class="page-item {% if p == page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('sql_page', billing_type=billing_type, usage_tier=usage_tier, page=p) }}">{{ p }}</a>
+                    </li>
+                {% endfor %}
+                
+                {% if end_page < total_pages %}
+                    {% if end_page < total_pages - 1 %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('sql_page', billing_type=billing_type, usage_tier=usage_tier, page=total_pages) }}">{{ total_pages }}</a></li>
+                {% endif %}
+                
+                <!-- Next Page -->
+                <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('sql_page', billing_type=billing_type, usage_tier=usage_tier, page=page+1) }}" aria-label="Next">
+                        <span aria-hidden="true">Next &raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
