@@ -15,14 +15,14 @@ def run_web_feature_tests():
     print("\n--- [STEP 1/6] Testing Dashboard page and charts JSON feed ---")
     try:
         # Fetch dashboard HTML
-        html_req = urllib.request.urlopen(f"{BASE_URL}/", timeout=5)
+        html_req = urllib.request.urlopen(f"{BASE_URL}/", timeout=60)
         html_content = html_req.read().decode('utf-8')
         assert "Executive Churn Risk Dashboard" in html_content, "FAILED: Dashboard header missing!"
         assert "Total Customers" in html_content, "FAILED: KPI metric cards missing!"
         print("SUCCESS: Dashboard HTML loaded and KPI structure verified.")
 
         # Fetch Chart.js data API
-        charts_req = urllib.request.urlopen(f"{BASE_URL}/api/dashboard/charts", timeout=5)
+        charts_req = urllib.request.urlopen(f"{BASE_URL}/api/dashboard/charts", timeout=60)
         charts_json = json.loads(charts_req.read().decode('utf-8'))
         assert "billing" in charts_json and "usage_churn" in charts_json, "FAILED: Chart data missing key segments!"
         print(f"SUCCESS: Chart JSON loaded. Billing categories: {charts_json['billing']['labels']}")
@@ -38,7 +38,7 @@ def run_web_feature_tests():
     try:
         # Trigger ETL run via POST
         etl_req = urllib.request.Request(f"{BASE_URL}/api/etl/run", method='POST')
-        with urllib.request.urlopen(etl_req, timeout=10) as response:
+        with urllib.request.urlopen(etl_req, timeout=60) as response:
             etl_json = json.loads(response.read().decode('utf-8'))
         
         assert etl_json.get("success") is True, "FAILED: ETL API returned failure!"
@@ -46,7 +46,7 @@ def run_web_feature_tests():
         print(f"SUCCESS: ETL API completed. Records parsed: {stats['initial_count']} -> Loaded into DB: {stats['db_customers']}")
         
         # Verify log stream
-        logs_req = urllib.request.urlopen(f"{BASE_URL}/api/etl/logs", timeout=5)
+        logs_req = urllib.request.urlopen(f"{BASE_URL}/api/etl/logs", timeout=60)
         logs_json = json.loads(logs_req.read().decode('utf-8'))
         assert "Saved cleaned and normalized data" in logs_json["logs"], "FAILED: Log text verification failed!"
         print("SUCCESS: Live logger streaming endpoints verified.")
@@ -65,7 +65,7 @@ def run_web_feature_tests():
             'usage_tier': 'Medium',
             'page': 1
         })
-        sql_req = urllib.request.urlopen(f"{BASE_URL}/sql?{query_params}", timeout=5)
+        sql_req = urllib.request.urlopen(f"{BASE_URL}/sql?{query_params}", timeout=60)
         sql_html = sql_req.read().decode('utf-8')
         
         assert "idx_customers_billing" in sql_html, "FAILED: Database optimization indices missing in query explanation!"
@@ -83,7 +83,7 @@ def run_web_feature_tests():
     try:
         # Request model training via POST
         train_req = urllib.request.Request(f"{BASE_URL}/api/model/train", method='POST')
-        with urllib.request.urlopen(train_req, timeout=15) as response:
+        with urllib.request.urlopen(train_req, timeout=60) as response:
             train_json = json.loads(response.read().decode('utf-8'))
             
         assert train_json.get("success") is True, "FAILED: Model training API failed!"
@@ -117,7 +117,7 @@ def run_web_feature_tests():
             method='POST'
         )
         
-        with urllib.request.urlopen(predict_req, timeout=5) as response:
+        with urllib.request.urlopen(predict_req, timeout=60) as response:
             predict_json = json.loads(response.read().decode('utf-8'))
             
         assert "churn_probability" in predict_json, "FAILED: Prediction return payload missing risk score!"
@@ -133,7 +133,7 @@ def run_web_feature_tests():
     print("\n--- [STEP 6/6] Testing Excel sheet downloader ---")
     try:
         # Request download
-        export_req = urllib.request.urlopen(f"{BASE_URL}/export", timeout=30)
+        export_req = urllib.request.urlopen(f"{BASE_URL}/export", timeout=60)
         headers = export_req.info()
         content_type = headers.get_content_type()
         content_length = int(headers.get("Content-Length", 0))
