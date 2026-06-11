@@ -339,11 +339,26 @@ def export_high_risk():
             top=Side(style='thin', color='E0E0E0'),
             bottom=Side(style='thin', color='E0E0E0')
         )
+        from openpyxl.utils import get_column_letter
+        
+        # Track column widths on the fly
+        col_widths = [len(h) for h in headers]
+        
+        # Row Border & Alternating Colors styling
+        thin_border = Border(
+            left=Side(style='thin', color='E0E0E0'),
+            right=Side(style='thin', color='E0E0E0'),
+            top=Side(style='thin', color='E0E0E0'),
+            bottom=Side(style='thin', color='E0E0E0')
+        )
         fill_even = PatternFill(start_color="F5F8FA", end_color="F5F8FA", fill_type="solid")
         
-        # Populate sheet
+        # Populate, style, format and width-track in a single pass
         for index, row in df.iterrows():
-            ws.append([
+            row_num = index + 2
+            is_even = row_num % 2 == 0
+            
+            row_values = [
                 row['customer_id'],
                 int(row['tenure_months']),
                 row['billing_type'],
@@ -353,13 +368,10 @@ def export_high_risk():
                 int(row['num_complaints']),
                 "Churned" if int(row['churn_label']) == 1 else "Active",
                 round(float(row['churn_prob']), 4)
-            ])
+            ]
             
-        # Style rows post append
-        for row_num in range(2, len(df) + 2):
-            is_even = row_num % 2 == 0
-            for col_num in range(1, len(headers) + 1):
-                cell = ws.cell(row=row_num, column=col_num)
+            for col_num, val in enumerate(row_values, 1):
+                cell = ws.cell(row=row_num, column=col_num, value=val)
                 cell.border = thin_border
                 if is_even:
                     cell.fill = fill_even
@@ -372,23 +384,20 @@ def export_high_risk():
                     
                 # Format specific values
                 if col_num in [5, 6]:
-                    cell.number_format = "$#,##0.00"
+                    cell.number_format = "$#,#0.00"
                 elif col_num == 9:
                     cell.number_format = "0.00%"
-                    # We store value as decimal, but Excel represents it as percent. Multiply by 100 for display? 
-                    # If we output cell value directly e.g. 0.85, 0.00% will show it as 85.00%. That's perfect!
                     
-        # Apply Auto-Fit for width
-        for col in ws.columns:
-            max_len = 0
-            col_letter = col[0].column_letter
-            for cell in col:
-                if cell.value:
-                    val_str = str(cell.value)
-                    if cell.number_format == "0.00%" and isinstance(cell.value, float):
-                        val_str = f"{cell.value * 100:.2f}%"
-                    max_len = max(max_len, len(val_str))
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+                # Track max length
+                val_str = str(val)
+                if col_num == 9:
+                    val_str = f"{val * 100:.2f}%"
+                col_widths[col_num - 1] = max(col_widths[col_num - 1], len(val_str))
+                
+        # Set column widths using tracked values
+        for col_num, width in enumerate(col_widths, 1):
+            col_letter = get_column_letter(col_num)
+            ws.column_dimensions[col_letter].width = max(width + 4, 12)
             
         output = BytesIO()
         wb.save(output)

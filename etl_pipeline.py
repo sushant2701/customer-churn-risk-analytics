@@ -163,7 +163,7 @@ def run_etl(raw_path=None):
         if null_count > 0:
             median_val = df_dedup[col].median()
             df_dedup[col] = df_dedup[col].fillna(median_val)
-            imputation_stats[col] = (null_count, median_val)
+            imputation_stats[col] = (int(null_count), float(median_val))
             log_message(f"Column '{col}': Imputed {null_count} nulls with median value: {median_val:.2f}")
         else:
             log_message(f"Column '{col}': No null values found.")
